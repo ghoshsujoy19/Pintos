@@ -20,8 +20,10 @@ void sema_self_test (void);
 /* Lock. */
 struct lock 
   {
+    int max_seeking_priority;   /* max priority of thread seeking the lock */
     struct thread *holder;      /* Thread holding lock (for debugging). */
     struct semaphore semaphore; /* Binary semaphore controlling access. */
+    struct list_elem elem;
   };
 
 void lock_init (struct lock *);
@@ -29,6 +31,8 @@ void lock_acquire (struct lock *);
 bool lock_try_acquire (struct lock *);
 void lock_release (struct lock *);
 bool lock_held_by_current_thread (const struct lock *);
+bool lock_encoder(const struct list_elem* a, const struct list_elem* b, void *aux);
+void update_lock_priority_on_release(struct thread*, struct lock*);
 
 /* Condition variable. */
 struct condition 

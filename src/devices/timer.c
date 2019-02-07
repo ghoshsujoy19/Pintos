@@ -24,6 +24,7 @@ static int64_t ticks;
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
 
+
 static intr_handler_func timer_interrupt;
 static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
@@ -99,10 +100,18 @@ void
 timer_sleep (int64_t ticks) 
 {
   int64_t start = timer_ticks ();
-
+  int64_t wakeup_time = start+ticks;
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  if(ticks <= 0){
+    return;
+  }
+
+  // thread_priority_temporarily_up();
+  thread_block_till(start, wakeup_time);
+  // thread_set_next_wakeup();
+  // thread_priority_restore();
+
+  // thread_sleep_till(start, wakeupTime);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be

@@ -284,7 +284,13 @@ run_task (char **argv)
   
   printf ("Executing '%s':\n", task);
 #ifdef USERPROG
-  process_wait (process_execute (task));
+  // process_wait (process_execute (task));
+  tid_t tid = process_execute (task);
+  // struct thread* child_thread = tid_mapping[tid];
+  // if(child_thread!=NULL){
+    // sema_up(&child_thread->sema_ack);
+  // }
+  process_wait (tid);
 #else
   run_test (task);
 #endif
