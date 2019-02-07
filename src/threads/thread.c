@@ -89,6 +89,13 @@ static void schedule (void);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+struct thread* tid_mapping[2041];
+int tid_load_complete[2041];
+int tid_return_val[2041];
+struct file* file_ptr[2041];
+int file_counter[2041];
+int counter;
+
 bool priority_encoder(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED){
 	// return effective_priority(list_entry(A, struct thread, elem)) > effective_priority(list_entry(B, struct thread, elem));
   return list_entry(A, struct thread, elem)->priority < list_entry(B, struct thread, elem)->priority;
@@ -148,6 +155,14 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+
+  counter=0;
+  memset(tid_mapping,NULL,sizeof(tid_mapping));
+  memset(file_ptr,NULL,sizeof(file_ptr));
+  memset(tid_load_complete,0,sizeof(tid_load_complete));
+  memset(file_counter, 0, sizeof(file_counter));
+  memset(tid_return_val,-2,sizeof(tid_return_val));
+  tid_mapping[initial_thread->tid] = thread_current();
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -260,6 +275,7 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  tid_mapping[tid] = t;
   /* Prepare thread for first run by initializing its stack.
      Do this atomically so intermediate values for the 'stack' 
      member cannot be observed. */
@@ -291,8 +307,14 @@ thread_create (const char *name, int priority,
   struct thread *ready_threads_head;
   ready_threads_head = list_entry(current_top_ready, struct thread, elem);
   if(ready_threads_head->priority > thread_current()->priority){
-    thread_yield();
+    if (intr_context ()){
+      intr_yield_on_return ();
+    }
+    else{
+      thread_yield ();
+    }
   }
+  // thread_yield();
   return tid;
 }
 
@@ -456,7 +478,12 @@ void thread_set_priority (int new_priority)
   struct thread *ready_threads_head;
   ready_threads_head = list_entry(current_top_ready, struct thread, elem);
   if(ready_threads_head->priority > new_priority){
-    thread_yield();
+    if (intr_context ()){
+      intr_yield_on_return ();
+    }
+    else{
+      thread_yield ();
+    }
   }
 }
 
@@ -464,7 +491,6 @@ void thread_set_priority (int new_priority)
 int thread_get_priority () 
 {
   return thread_current ()->priority;
-  // return effective_priority(thread_current());
 }
 
 /* wont be used but kept for debugging purpose if any */
@@ -562,7 +588,12 @@ thread_set_nice (int nice UNUSED)
   struct thread *ready_threads_head;
   ready_threads_head = list_entry(current_top_ready, struct thread, elem);
   if(ready_threads_head->priority > curr_thread->priority){
-    thread_yield();
+    if (intr_context ()){
+      intr_yield_on_return ();
+    }
+    else{
+      thread_yield ();
+    }
   }
 }
 
@@ -713,6 +744,41 @@ init_thread (struct thread *t, const char *name, int priority)
     t->nice_value = thread_current()->nice_value;
   }
   
+<<<<<<< thread.c
+<<<<<<< thread.c
+  #ifdef USERPROG
+    sema_init (&t->sema_ready, 0);
+    sema_init (&t->sema_terminated, 0);
+    sema_init (&t->sema_ack, 0);
+    t->return_status = -1;
+    t->load_complete = false;
+    int i;
+    for(i=0;i<MAX_FILES;i++){
+      t->open_files[i] = NULL;
+    }
+    
+  #endif
+  if(t != initial_thread){
+    page_table_init(t->page_table);
+  }
+  t->file_executable = NULL;
+=======
+>>>>>>> 1.14
+=======
+  #ifdef USERPROG
+    sema_init (&t->sema_ready, 0);
+    sema_init (&t->sema_terminated, 0);
+    sema_init (&t->sema_ack, 0);
+    t->return_status = -1;
+    t->load_complete = false;
+    int i;
+    for(i=0;i<MAX_FILES;i++){
+      t->open_files[i] = NULL;
+    }
+    
+  #endif
+  t->file_executable = NULL;
+>>>>>>> 1.20
   t->recent_cpu = 0;
   list_push_back (&all_list, &t->allelem);
 }
@@ -883,7 +949,7 @@ void thread_set_next_wakeup(){
   struct list_elem *current_top_sleeping;
   struct thread *sleeping_threads_head;
   while(!list_empty(&sleeping_threads)){
-    current_top_sleeping = list_front(&sleeping_threads);
+    current_top_sleeping = list_begin(&sleeping_threads);
     sleeping_threads_head = list_entry(current_top_sleeping, struct thread, elem);
     if(sleeping_threads_head->wakeup_time <= current_time){
       /*Pop the thread o be waken up*/
@@ -896,11 +962,18 @@ void thread_set_next_wakeup(){
   }
   if(list_empty(&sleeping_threads)){
     next_wakeup_time = INT64_MAX;
-    return;
   }
-  struct thread *new_current_sleeping = list_entry(list_front(&sleeping_threads), struct thread, elem);
-  /* Update next_wakeup_time to next node */
-  next_wakeup_time = new_current_sleeping->wakeup_time;
+  else {
+    struct thread *new_current_sleeping = list_entry(list_begin(&sleeping_threads), struct thread, elem);
+    /* Update next_wakeup_time to next node */
+    next_wakeup_time = new_current_sleeping->wakeup_time;
+  }
+  struct list_elem *current_top_ready = list_max(&ready_list, priority_encoder, NULL);
+  struct thread *ready_threads_head;
+  ready_threads_head = list_entry(current_top_ready, struct thread, elem);
+  if(ready_threads_head->priority > thread_current()->priority){
+    thread_yield();
+  }
 }
 
 /*Retores thread prioirty after it has utilised its CPU timer ticks*/
@@ -960,3 +1033,31 @@ static void wakeup_manager(void *aux UNUSED){
   }
 }
 
+bool get_thread_dyingstat_by_tid (tid_t tid) {
+  struct list_elem *iter;
+  struct thread *ret=NULL, *t = thread_current();
+  for (iter = list_begin (&all_list); iter != list_end (&all_list); iter = list_next (iter)){
+    ret = list_entry (iter, struct thread, allelem);
+    ASSERT (is_thread (ret));
+    if (ret->tid == tid && ret->status != THREAD_DYING){
+      return true;
+    }
+  } 
+  return false;
+}
+
+struct thread* get_thread_by_tid (tid_t tid) {
+  struct list_elem *iter;
+  struct thread *ret=NULL, *t = thread_current();
+  if(list_empty(&all_list)){
+    return NULL;
+  }
+  for (iter = list_begin (&all_list); iter != list_end (&all_list); iter = list_next (iter)){
+    ret = list_entry (iter, struct thread, allelem);
+    ASSERT (is_thread (ret));
+    if (ret->tid == tid){
+      return ret;
+    }
+  } 
+  return NULL;
+}

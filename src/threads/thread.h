@@ -5,6 +5,16 @@
 #include <list.h>
 #include <stdint.h>
 #include <stdbool.h>
+<<<<<<< thread.h
+<<<<<<< thread.h
+#include "threads/synch.h"
+#include "vm/page.h"
+=======
+
+>>>>>>> 1.12
+=======
+#include "threads/synch.h"
+>>>>>>> 1.17
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -23,6 +33,18 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+#define MAX_FILES 128
+
+extern struct thread* tid_mapping[2041];
+extern int tid_load_complete[2041];
+extern int tid_return_val[2041];
+extern struct file* file_ptr[2041];
+extern int file_counter[2041];
+extern int counter;
+
+#ifdef USERPROG
+# define RET_STATUS_DEFAULT 0xcdcdcdcd
+#endif
 
 /* A kernel thread or user process.
 
@@ -100,11 +122,34 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+    struct semaphore sema_ready;
+    struct semaphore sema_terminated;
+    struct semaphore sema_ack;
+    int return_status;
+    bool load_complete;
+    struct file *file_executable;
+    struct file *open_files[MAX_FILES];
 #endif
+<<<<<<< thread.h
+<<<<<<< thread.h
+    struct hash page_table;
+=======
+>>>>>>> 1.12
+=======
+
+>>>>>>> 1.17
     struct list lock_acquired;          /* list of acquired locks by the thread */
     struct lock* seeking;               /* pointer to lock it is seeking */
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+  };
+
+struct file_stat
+  {
+    char *file_name;
+    int open_exec;
+    struct file* file_ptr;
+    struct list_elem file_elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -155,6 +200,7 @@ void update_recent_cpu(struct thread*);
 void thread_update_priority(struct thread*);
 void update_all_priorities(void);
 
+
 // for priority donation purposes
 void donate_priority(struct thread*);
 void update_priority_on_release(struct thread*);
@@ -162,5 +208,7 @@ void update_priority_on_release(struct thread*);
 // for sorting the values/finding maximum
 bool priority_encoder(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED);
 bool sleeping_encoder(const struct list_elem *A, const struct list_elem *B, void *aux UNUSED);
+bool get_thread_dyingstat_by_tid (tid_t tid);
+struct thread* get_thread_by_tid (tid_t tid);
 
 #endif /* threads/thread.h */
